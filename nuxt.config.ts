@@ -8,6 +8,7 @@ export default defineNuxtConfig({
   modules: ['@nuxt/eslint', '@nuxt/ui', '@pinia/nuxt'],
   css: ['~/assets/css/main.css'],
   plugins: ['~/plugins/afetch.ts'],
+  ssr: false,
   alias: {
     '@t': fileURLToPath(new URL('./types', import.meta.url)),
   },

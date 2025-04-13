@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 import type { NitroFetchOptions } from 'nitropack';
 import { useAuthStore } from '~/stores/auth';
 
@@ -9,6 +10,7 @@ export default defineNuxtPlugin(() => {
       async afetch<T>(url: string, options?: FetchOptions) {
         const { onResponse = () => {}, ...otherOptions } = options || {};
         const { accessToken } = useAuthStore();
+        console.log('@@ accessToken : ', accessToken);
 
         const resp = await $fetch<T>(url, {
           credentials: 'include',
@@ -17,6 +19,10 @@ export default defineNuxtPlugin(() => {
           },
           retry: 0,
           onResponse,
+          onResponseError({ response }) {
+            const errorText = response._data?.message || response.statusText || 'An error occurred';
+            throw new Error(errorText);
+          },
           ...otherOptions,
         });
         console.log('resp : ', resp);

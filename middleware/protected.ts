@@ -6,7 +6,7 @@ export default defineNuxtRouteMiddleware(async () => {
   }
   const authStore = useAuthStore();
   await authStore.checkAuth();
-  console.log('PROTECTED - authStore AFTER CHECK AUTH : ', authStore);
+  console.log('PROTECTED - authStore AFTER CHECK AUTH : ', authStore.accessToken);
 
   if (!authStore.accessToken) {
     return navigateTo('/');

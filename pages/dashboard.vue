@@ -1,26 +1,106 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
-<script setup>
-  const toast = useToast()
-  const files = ref([]) // Array of {name: string, size: number}
+<!-- eslint-disable @typescript-eslint/no-explicit-any -->
+<script setup lang='ts'>
+import type { DropdownMenuItem } from '@nuxt/ui';
+import type { FileEntity } from '~/types';
+
+definePageMeta({
+  middleware: ['protected'],
+});
+
+const toast = useToast()
+const authStore = useAuthStore();
+
+  // const files = ref<FileEntity[]>([])
   const selectedFile = ref(null)
-  const isUploading = ref(false)
-  
-  // Fetch initial files when page loads
-  onMounted(async () => {
-    try {
-      const response = await $fetch('/api/files') // Assuming this endpoint exists
-      files.value = response
-    } catch (error) {
-      toast.add({
-        title: 'Error',
-        description: 'Failed to load files',
-        color: 'red'
-      })
+const isUploading = ref(false)
+
+const allowedExtensions = ['.xlsx', '.xlsm', '.xlsb', '.xls'];
+const isFileHaveAcceptedFormat = (file: FileEntity) => allowedExtensions.includes(file.name.slice(file.name.lastIndexOf('.')).toLowerCase())
+const getFileDropdownItems = (file: FileEntity): DropdownMenuItem[] => {
+    return [
+  {
+    label: 'Download',
+    color: 'primary',
+    icon: 'solar:download-minimalistic-outline',
+    onSelect() {
+        downloadFile(file.name)
+      },
+  },
+  {
+    label: 'Delete',
+    color: 'error',
+    icon: 'solar:trash-bin-2-bold',
+    onSelect() {
+        deleteFile(file.name)
+      },
     }
-  })
+  ]
+  }
+
+  const { $afetch } = useNuxtApp();
+
   
-  const handleFileUpload = (event) => {
-    selectedFile.value = event.target.files[0]
+  // onMounted(async () => {
+  //   try {
+  //     const storedFiles = await $afetch<any>(useUrl().files(), { method: 'GET' });
+  //     console.log('@@ storedFiles : ', storedFiles)
+  //     files.value = [...storedFiles]
+  //   } catch (error) {
+  //     toast.add({
+  //       title: 'Error',
+  //       description: 'Failed to load files',
+  //       color: 'error'
+  //     })
+  //   }
+// })
+
+const { data: files, refresh } = await useAsyncData('getUsers', async () => {
+    // isLoading.value = true
+    const storedFiles = await $afetch<FileEntity[]>(useUrl().files(), {
+      method: 'get',
+      ignoreResponseError: true
+    })
+    // isLoading.value = false
+    return storedFiles
+  },
+    {
+      default: (): any[] => [],
+      transform: (files) => files.filter(item => isFileHaveAcceptedFormat(item)),
+      // watch: [currentPage, pageSize, appliedSearchTerm]
+    }
+)
+  
+const handleFileUpload = (event: any) => {
+  const input = event.target;
+  if (!input.files?.length) {
+    return
+  }
+
+  if (input.files.length > 1) {
+    toast.add({
+        title: 'Error',
+        description: 'You are allowed to upload only 1 file',
+        color: 'error'
+    })
+    input.value = "";
+    return
+  }
+
+  const file = input.files[0]
+
+  if (!isFileHaveAcceptedFormat(file)) {
+    toast.add({
+        title: 'Error',
+        description: `File ${file.name} have unacceptable type`,
+        color: 'error'
+    })
+    input.value = "";
+    return
+  }
+
+    selectedFile.value = file
+    return
   }
   
   const uploadFile = async () => {
@@ -28,7 +108,7 @@
       toast.add({
         title: 'Error',
         description: 'Please select a file first',
-        color: 'red'
+        color: 'error'
       })
       return
     }
@@ -38,80 +118,74 @@
     formData.append('file', selectedFile.value)
   
     try {
-      const response = await $fetch('/api/new', {
-        method: 'POST',
-        body: formData
-      })
-  
+      const uploadFilesResp = await $afetch<FileEntity>(useUrl().files(), { method: 'POST', body: formData });
       files.value.push({
-        name: response.name,
-        size: selectedFile.value.size
+        name: uploadFilesResp.name,
+        size: uploadFilesResp.size
       })
   
       toast.add({
         title: 'Success',
         description: 'File uploaded successfully',
-        color: 'green'
+        color: "success"
       })
       
-      selectedFile.value = null // Reset file input
-    } catch (error) {
+      selectedFile.value = null
+    } catch (error: any) {
       toast.add({
         title: 'Error',
         description: error.message || 'Failed to upload file',
-        color: 'red'
+        color: 'error'
       })
     } finally {
       isUploading.value = false
     }
   }
   
-  const deleteFile = async (name) => {
+  const deleteFile = async (name: string) => {
     try {
-      await $fetch(`/api/file/${name}`, {
-        method: 'DELETE'
-      })
-  
-      files.value = files.value.filter(file => file.name !== name)
+      await $afetch(useUrl().files(name), { method: 'DELETE' });
+      files.value = [...files.value.filter(file => file.name !== name)]
       
       toast.add({
         title: 'Success',
         description: 'File deleted successfully',
-        color: 'green'
+        color: "primary"
       })
-    } catch (error) {
+    } catch (error: any) {
       toast.add({
         title: 'Error',
-        description: 'Failed to delete file',
-        color: 'red'
+        description: error.message ||  'Failed to delete file',
+        color: 'error'
       })
     }
   }
   
-  const downloadFile = async (name) => {
+const downloadFile = async (name: string) => {
     try {
-      const response = await $fetch(`/api/file/${name}`, {
-        method: 'GET'
-      })
-      
-      // Assuming the response is a blob or URL
-      const url = window.URL.createObjectURL(new Blob([response]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', name)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } catch (error) {
+      const response = await $afetch<Blob>(useUrl().files(name), { method: 'GET', responseType: 'blob' });
+
+      const url = window.URL.createObjectURL(response);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', name);
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.log('@@ ERROR: ', {error})
       toast.add({
         title: 'Error',
-        description: 'Failed to download file',
-        color: 'red'
+        description: error.message || 'Failed to download file',
+        color: 'error'
       })
     }
   }
   
-  const formatSize = (bytes) => {
+  const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
     const k = 1024
     const sizes = ['Bytes', 'KB', 'MB', 'GB']
@@ -121,7 +195,10 @@
 </script>
 
 <template>
-    <UContainer>
+    <UContainer class="mt-12">
+    <div class="flex justify-end mb-6 px-0">
+      <UButton size="xl" color="error" trailing-icon="i-lucide-arrow-right" @click="authStore.signOut">Sign Out</UButton>
+    </div>
       <UCard class="mb-6">
         <template #header>
           <h2 class="text-xl font-semibold">Upload New File</h2>
@@ -140,7 +217,7 @@
             color="primary"
             @click="uploadFile"
           >
-            Upload
+            Start
           </UButton>
         </div>
       </UCard>
@@ -152,7 +229,7 @@
   
         <UAlert
           v-if="files.length === 0"
-          color="gray"
+          color="neutral"
           variant="subtle"
           title="No files yet"
           description="Upload your first file to get started"
@@ -162,7 +239,7 @@
           <div
             v-for="file in files"
             :key="file.name"
-            class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+            class="flex items-center justify-between p-3 rounded-lg"
           >
             <div class="flex items-center gap-3">
               <UIcon name="i-heroicons-document" class="w-6 h-6" />
@@ -171,34 +248,10 @@
                 <p class="text-sm text-gray-500">{{ formatSize(file.size) }}</p>
               </div>
             </div>
-  
-            <UPopover :popper="{ placement: 'bottom-end' }">
-              <UButton
-                variant="ghost"
-                color="gray"
-                icon="i-heroicons-ellipsis-vertical"
-              />
-              
-              <template #panel>
-                <div class="p-2 flex flex-col gap-1">
-                  <UButton
-                    size="sm"
-                    variant="ghost"
-                    icon="i-heroicons-arrow-down-tray"
-                    label="Download"
-                    @click="downloadFile(file.name)"
-                  />
-                  <UButton
-                    size="sm"
-                    variant="ghost"
-                    color="red"
-                    icon="i-heroicons-trash"
-                    label="Delete"
-                    @click="deleteFile(file.name)"
-                  />
-                </div>
-              </template>
-            </UPopover>
+
+            <UDropdownMenu :items="getFileDropdownItems(file)" size="xl">
+                <UButton color='primary' variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
+            </UDropdownMenu>
           </div>
         </div>
       </UCard>

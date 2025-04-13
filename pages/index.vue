@@ -1,3 +1,4 @@
+<!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import Joi from 'joi'
 import type { FormSubmitEvent } from '#ui/types'
@@ -18,8 +19,8 @@ const authStore = useAuthStore()
 const router = useRouter()
 
 const loginState = reactive({
-    login: '',
-    password: ''
+    login: 'ordr[jQ%uWy7S%]^',
+    password: '9rvQdxg2g{z]$$3@'
 })
 const loading = ref(false)
 const error = ref('')
